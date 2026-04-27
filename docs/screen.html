@@ -715,5 +715,37 @@ function bootTweaks(){
   setLive(false, "演示模式 · 模拟数据");
 </script>
 
+<!-- Floating trigger: 面板默认靠 host postMessage 触发 (作者设计给 iframe 用)，
+     裸 GitHub Pages 没 host，加个右下角按钮 + T 键快捷开关 -->
+<script>
+(function(){
+  const btn = document.createElement('button');
+  btn.id = 'tweaks-trigger';
+  btn.textContent = '⚙';
+  btn.title = '控制面板（T 键切换）';
+  btn.setAttribute('aria-label', '打开控制面板');
+  btn.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:9999;width:44px;height:44px;border-radius:50%;border:none;background:#15181B;color:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 16px rgba(20,24,28,.18);display:flex;align-items:center;justify-content:center;transition:transform .2s,opacity .2s;opacity:.85';
+  btn.onmouseover = function(){ btn.style.transform='scale(1.08)'; btn.style.opacity='1'; };
+  btn.onmouseout = function(){ btn.style.transform='scale(1)'; btn.style.opacity='.85'; };
+  let open = false;
+  function toggle(){
+    open = !open;
+    window.postMessage({ type: open ? '__activate_edit_mode' : '__deactivate_edit_mode' }, '*');
+  }
+  btn.onclick = toggle;
+  window.addEventListener('keydown', function(e){
+    if ((e.key==='t' || e.key==='T') && !e.ctrlKey && !e.metaKey && !e.altKey
+        && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {
+      toggle();
+    }
+  });
+  // Sync state if panel closes itself (X button)
+  window.addEventListener('message', function(e){
+    if (e && e.data && e.data.type === '__edit_mode_dismissed') open = false;
+  });
+  document.body.appendChild(btn);
+})();
+</script>
+
 </body>
 </html>
