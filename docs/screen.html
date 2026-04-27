@@ -300,6 +300,21 @@
         onerror="this.onerror=null;this.src='https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js'"></script>
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.29.0/babel.min.js"
         onerror="this.onerror=null;this.src='https://unpkg.com/@babel/standalone@7.29.0/babel.min.js'"></script>
+
+<!-- CloudBase SDK loader: 必须在普通 <script> 块里（type=text/babel 会把 dynamic import() 误转成 require） -->
+<script>
+window.getCloudBase = (function(){
+  let _cb = null;
+  return async function(){
+    if (!_cb){
+      const m = await import("https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/+esm");
+      _cb = m.default || m;
+    }
+    return _cb;
+  };
+})();
+</script>
+
 <script type="text/babel" src="tweaks-panel.jsx"></script>
 
 <script type="text/babel">
@@ -408,17 +423,9 @@ const Demo = {
 /* ============================================================
    CloudBase hook (only used when not in demo)
    函数名保留 startFirebase / stopFirebase，便于 Tweaks panel 沿用切换逻辑。
-   SDK 通过 esm.sh ES module dynamic import 加载（npm 包无 UMD bundle）。
+   SDK 通过 window.getCloudBase() 加载（定义在外层普通 <script> 块）。
 ============================================================ */
 let cloudWatcher = null;
-let _cbModule = null;
-async function getCloudBase(){
-  if (!_cbModule){
-    const m = await import("https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/+esm");
-    _cbModule = m.default || m;
-  }
-  return _cbModule;
-}
 
 async function startFirebase(){
   const cfg = window.CLOUDBASE_CONFIG;
@@ -427,7 +434,7 @@ async function startFirebase(){
     return false;
   }
   try{
-    const cloudbase = await getCloudBase();
+    const cloudbase = await window.getCloudBase();
     const app = cloudbase.init({ env: cfg.env });
     await app.auth({ persistence: "local" }).signInAnonymously();
     const db = app.database();
