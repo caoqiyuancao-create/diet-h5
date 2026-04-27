@@ -328,10 +328,8 @@
     </div>
   </div>
 
-<!-- CloudBase config + SDK (jsDelivr 主 / unpkg 备) -->
+<!-- CloudBase config (SDK 通过 ES module dynamic import 加载) -->
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/dist/cloudbase.full.js"
-        onerror="this.onerror=null;this.src='https://unpkg.com/@cloudbase/js-sdk@2/dist/cloudbase.full.js'"></script>
 
 <script>
 /* ============================================================
@@ -490,19 +488,26 @@ submitBtn.addEventListener("click", async () => {
 /* ============================================================
    CloudBase submission (腾讯云 CloudBase)
    配置在 config.js 中。env id + collection name。
+   SDK 通过 esm.sh ES module dynamic import 加载（npm 包无 UMD bundle）。
 ============================================================ */
+let _cbModule = null;
+async function getCloudBase(){
+  if (!_cbModule){
+    const m = await import("https://esm.sh/@cloudbase/js-sdk@2");
+    _cbModule = m.default || m;
+  }
+  return _cbModule;
+}
+
 async function submitToBackend(result){
   const cfg = window.CLOUDBASE_CONFIG;
   if (!cfg || !cfg.env){
     console.info("[demo] CloudBase 未配置，提交未上传");
     return;
   }
-  if (typeof cloudbase === "undefined"){
-    console.warn("CloudBase SDK 未加载（可能 CDN 被墙）");
-    return;
-  }
   if (sessionStorage.getItem("submitted")) return; // prevent duplicates per session
   try{
+    const cloudbase = await getCloudBase();
     const app = cloudbase.init({ env: cfg.env });
     await app.auth({ persistence: "local" }).signInAnonymously();
     const db = app.database();

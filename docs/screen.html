@@ -290,10 +290,8 @@
   </div>
 </div>
 
-<!-- CloudBase config + SDK (jsDelivr 主 / unpkg 备) -->
+<!-- CloudBase config (SDK 通过 ES module dynamic import 加载) -->
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/dist/cloudbase.full.js"
-        onerror="this.onerror=null;this.src='https://unpkg.com/@cloudbase/js-sdk@2/dist/cloudbase.full.js'"></script>
 
 <!-- React + Babel (jsDelivr 主 / unpkg 备) -->
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"
@@ -410,19 +408,26 @@ const Demo = {
 /* ============================================================
    CloudBase hook (only used when not in demo)
    函数名保留 startFirebase / stopFirebase，便于 Tweaks panel 沿用切换逻辑。
+   SDK 通过 esm.sh ES module dynamic import 加载（npm 包无 UMD bundle）。
 ============================================================ */
 let cloudWatcher = null;
+let _cbModule = null;
+async function getCloudBase(){
+  if (!_cbModule){
+    const m = await import("https://esm.sh/@cloudbase/js-sdk@2");
+    _cbModule = m.default || m;
+  }
+  return _cbModule;
+}
+
 async function startFirebase(){
   const cfg = window.CLOUDBASE_CONFIG;
   if (!cfg || !cfg.env){
     setLive(false, "未配置 CloudBase · 请使用演示模式");
     return false;
   }
-  if (typeof cloudbase === "undefined"){
-    setLive(false, "CloudBase SDK 未加载");
-    return false;
-  }
   try{
+    const cloudbase = await getCloudBase();
     const app = cloudbase.init({ env: cfg.env });
     await app.auth({ persistence: "local" }).signInAnonymously();
     const db = app.database();
