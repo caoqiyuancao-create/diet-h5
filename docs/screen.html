@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920,initial-scale=1">
+<title>身心营养红绿灯 · 实时统计大屏</title>
+<style>
+  :root{
+    --bg:#F6F4EF;
+    --surface:#FFFFFF;
+    --ink:#15181B;
+    --ink-2:#3A4046;
+    --muted:#7C8189;
+    --line:rgba(20,24,28,.08);
+    --line-strong:rgba(20,24,28,.14);
+    --red:#E0533F;  --red-soft:#FDECE7;
+    --amber:#E89629; --amber-soft:#FCEFD7;
+    --green:#2BA876; --green-soft:#E0F2E8;
+    --shadow-md:0 6px 24px rgba(20,24,28,.06), 0 2px 6px rgba(20,24,28,.04);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+
+  /* ---------- 1920×1080 stage that scales to viewport ---------- */
+  .stage-wrap{position:fixed;inset:0;display:grid;place-items:center;background:var(--bg)}
+  .stage{width:1920px;height:1080px;transform-origin:center center;position:relative;background:var(--bg)}
+
+  /* ---------- Top bar ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:32px 48px 0}
+  .brand{display:flex;align-items:baseline;gap:18px}
+  .brand .eyebrow{font-size:14px;letter-spacing:.32em;color:var(--muted);font-weight:500;text-transform:uppercase}
+  .brand h1{margin:0;font-size:34px;font-weight:700;letter-spacing:-.01em}
+  .brand h1 .r{color:var(--red)} .brand h1 .y{color:var(--amber)} .brand h1 .g{color:var(--green)}
+
+  .clock{display:flex;align-items:center;gap:16px}
+  .live{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:13px;letter-spacing:.06em;color:var(--ink-2)}
+  .live .pulse{width:7px;height:7px;border-radius:50%;background:#e53e3e;box-shadow:0 0 0 0 rgba(229,62,62,.6);animation:pulse 1.4s ease-out infinite}
+  .live.demo .pulse{background:#9c6a16;animation:none}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(229,62,62,.5)}70%{box-shadow:0 0 0 12px rgba(229,62,62,0)}100%{box-shadow:0 0 0 0 rgba(229,62,62,0)}}
+  .clock .time{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:18px;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
+
+  /* ---------- Grid: KPI row + main row ---------- */
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:auto 1fr;gap:24px;padding:28px 48px 36px;height:calc(100% - 88px)}
+
+  /* KPI cards */
+  .kpi{
+    grid-column:span 3;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:24px 28px;
+    display:flex;flex-direction:column;justify-content:space-between;min-height:172px;
+    box-shadow:var(--shadow-md);position:relative;overflow:hidden;
+  }
+  .kpi .lbl{font-size:14px;color:var(--muted);letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+  .kpi .lbl i{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .kpi .num{font-family:"Inter","SF Pro Display",-apple-system,sans-serif;font-size:88px;font-weight:700;line-height:1;letter-spacing:-.04em;font-feature-settings:"tnum"}
+  .kpi .sub{font-size:13.5px;color:var(--muted)}
+  .kpi.r .num{color:var(--red)} .kpi.r .lbl i{background:var(--red)}
+  .kpi.y .num{color:#b97a14} .kpi.y .lbl i{background:var(--amber)}
+  .kpi.g .num{color:var(--green)} .kpi.g .lbl i{background:var(--green)}
+  .kpi.total .num{color:var(--ink)}
+  .kpi .delta{font-size:13px;color:var(--green);font-weight:600;margin-left:8px;font-family:"SF Mono",monospace}
+  .kpi .ring{position:absolute;right:-30px;bottom:-30px;width:160px;height:160px;border-radius:50%;opacity:.05}
+  .kpi.r .ring{background:var(--red)} .kpi.y .ring{background:var(--amber)} .kpi.g .ring{background:var(--green)} .kpi.total .ring{background:var(--ink)}
+
+  /* Main row */
+  .panel{
+    background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:28px;
+    box-shadow:var(--shadow-md);display:flex;flex-direction:column;min-height:0;
+  }
+  .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex:0 0 auto}
+  .panel-head h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.005em;display:flex;align-items:center;gap:10px}
+  .panel-head h2 .pip{width:6px;height:24px;border-radius:3px;background:var(--ink)}
+  .panel-head .meta{font-size:13px;color:var(--muted);letter-spacing:.04em}
+
+  /* Donut */
+  .donut-panel{grid-column:span 4;grid-row:span 1}
+  .donut-wrap{flex:1;display:flex;align-items:center;justify-content:center;gap:24px;min-height:0}
+  .donut-svg{width:300px;height:300px;flex:0 0 auto}
+  .donut-legend{display:flex;flex-direction:column;gap:14px;flex:1}
+  .legend-row{display:flex;align-items:baseline;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  .legend-row:first-child{border-top:none}
+  .legend-row .swatch{width:14px;height:14px;border-radius:4px;flex:0 0 auto;align-self:center}
+  .legend-row .name{font-size:14.5px;color:var(--ink-2);flex:1;font-weight:500}
+  .legend-row .pct{font-family:"Inter","SF Pro Display",sans-serif;font-size:24px;font-weight:700;color:var(--ink);letter-spacing:-.02em;font-feature-settings:"tnum"}
+  .legend-row .pct small{font-size:12px;color:var(--muted);font-weight:500;margin-left:3px}
+  .legend-row.r .swatch{background:var(--red)}
+  .legend-row.y .swatch{background:var(--amber)}
+  .legend-row.g .swatch{background:var(--green)}
+
+  /* Top 3 red habits */
+  .top3-panel{grid-column:span 4}
+  .top3-list{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center}
+  .top3-card{
+    border:1px solid var(--red-soft);background:linear-gradient(135deg,#FFF6F3 0%, #FDECE7 100%);
+    border-radius:18px;padding:18px 20px;display:flex;align-items:center;gap:18px;
+    position:relative;overflow:hidden;
+  }
+  .top3-card .rk{
+    font-family:"Inter","SF Pro Display",sans-serif;font-size:48px;font-weight:800;
+    color:var(--red);line-height:1;letter-spacing:-.04em;width:64px;flex:0 0 auto;
+  }
+  .top3-card .body{flex:1;min-width:0}
+  .top3-card .body .t{font-size:16px;font-weight:600;color:var(--ink);margin-bottom:8px;line-height:1.35}
+  .top3-card .barwrap{display:flex;align-items:center;gap:10px}
+  .top3-card .bar{flex:1;height:6px;background:rgba(224,83,63,.18);border-radius:3px;overflow:hidden}
+  .top3-card .bar i{display:block;height:100%;background:var(--red);border-radius:3px;width:0;transition:width 1s cubic-bezier(.2,.7,.2,1)}
+  .top3-card .v{font-family:"SF Mono",monospace;font-size:14px;color:var(--red);font-weight:700;flex:0 0 auto}
+
+  /* Activity feed */
+  .feed-panel{grid-column:span 4;overflow:hidden}
+  .feed{flex:1;overflow:hidden;position:relative;mask-image:linear-gradient(to bottom,transparent 0,#000 8%,#000 92%,transparent 100%)}
+  .feed-list{display:flex;flex-direction:column;gap:10px;padding:8px 4px}
+  .feed-item{
+    display:flex;align-items:center;gap:14px;padding:12px 14px;
+    background:#FAFAF7;border:1px solid var(--line);border-radius:14px;
+    animation:slideIn .5s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes slideIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+  .feed-item .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+  .feed-item.r .dot{background:var(--red)} .feed-item.y .dot{background:var(--amber)} .feed-item.g .dot{background:var(--green)}
+  .feed-item .anon{font-size:14px;color:var(--ink-2);flex:1;font-weight:500}
+  .feed-item .verdict{font-size:12.5px;font-weight:600;letter-spacing:.04em;padding:3px 10px;border-radius:999px}
+  .feed-item.r .verdict{background:var(--red-soft);color:var(--red)}
+  .feed-item.y .verdict{background:var(--amber-soft);color:#9c6a16}
+  .feed-item.g .verdict{background:var(--green-soft);color:var(--green)}
+  .feed-item .when{font-family:"SF Mono",monospace;font-size:11.5px;color:var(--muted);flex:0 0 auto}
+
+  /* Per-question ranking */
+  .rank-panel{grid-column:span 12}
+  .rank-tabs{display:flex;gap:8px}
+  .rank-tab{
+    padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:#fff;cursor:pointer;
+    font-family:inherit;font-size:13px;color:var(--ink-2);letter-spacing:.04em;transition:.2s;
+  }
+  .rank-tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .rank-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 28px;flex:1;overflow:hidden}
+  .rank-row{display:grid;grid-template-columns:24px 1fr 60px 80px;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--line);min-width:0}
+  .rank-row:first-child{border-top:none}
+  .rank-row .qn{font-family:"SF Mono",monospace;font-size:11.5px;color:var(--muted);font-weight:600}
+  .rank-row .qt{font-size:13.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rank-row .qb{height:6px;background:rgba(20,24,28,.06);border-radius:3px;position:relative;overflow:hidden}
+  .rank-row .qb i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;width:0;transition:width .8s cubic-bezier(.2,.7,.2,1)}
+  .rank-row[data-tag="r"] .qb i{background:var(--red)}
+  .rank-row[data-tag="y"] .qb i{background:var(--amber)}
+  .rank-row[data-tag="g"] .qb i{background:var(--green)}
+  .rank-row .qv{font-family:"SF Mono",monospace;font-size:13px;font-weight:700;text-align:right;font-feature-settings:"tnum"}
+  .rank-row[data-tag="r"] .qv{color:var(--red)}
+  .rank-row[data-tag="y"] .qv{color:#9c6a16}
+  .rank-row[data-tag="g"] .qv{color:var(--green)}
+
+  /* Empty state */
+  .empty{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
+    background:rgba(246,244,239,.85);backdrop-filter:blur(4px);border-radius:24px;z-index:5;text-align:center;padding:32px;
+  }
+  .empty.show{display:flex}
+  .empty .qr-box{width:180px;height:180px;background:#fff;border:1px solid var(--line);border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;font-size:13px;color:var(--muted);text-align:center;padding:16px;line-height:1.5}
+  .empty h3{margin:8px 0 4px;font-size:22px}
+  .empty p{margin:0;color:var(--muted);font-size:14px;max-width:380px}
+
+  /* Footer note */
+  .stage-foot{position:absolute;left:48px;right:48px;bottom:14px;display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;letter-spacing:.04em}
+
+  /* Tweaks-only: paused banner */
+  .pause-banner{position:absolute;top:84px;left:50%;transform:translateX(-50%);background:#15181B;color:#fff;padding:8px 18px;border-radius:999px;font-size:13px;letter-spacing:.04em;display:none;z-index:4;box-shadow:var(--shadow-md)}
+  .pause-banner.show{display:flex;align-items:center;gap:8px}
+  .pause-banner .dot{width:8px;height:8px;background:#FFD23F;border-radius:50%}
+</style>
+</head>
+<body>
+
+<div class="stage-wrap">
+  <div class="stage" id="stage">
+
+    <!-- top bar -->
+    <div class="topbar">
+      <div class="brand">
+        <span class="eyebrow">互动 ② · 实时统计</span>
+        <h1>身心营养<span class="r">红</span><span class="y">绿</span><span class="g">灯</span></h1>
+      </div>
+      <div class="clock">
+        <span class="live" id="live"><span class="pulse"></span><span id="live-text">LIVE · 实时同步</span></span>
+        <span class="time" id="time">00:00:00</span>
+      </div>
+    </div>
+
+    <div class="pause-banner" id="pause-banner"><span class="dot"></span>已暂停接收新数据</div>
+
+    <!-- main grid -->
+    <div class="grid">
+
+      <!-- KPI row -->
+      <div class="kpi total">
+        <span class="lbl">已提交人数</span>
+        <span class="num" id="kpi-total">0</span>
+        <span class="sub" id="kpi-total-sub">扫码加入：右下角二维码</span>
+        <div class="ring"></div>
+      </div>
+      <div class="kpi r">
+        <span class="lbl"><i></i>红灯 · 警惕区</span>
+        <span class="num" id="kpi-r">0</span>
+        <span class="sub" id="kpi-r-sub">— %</span>
+        <div class="ring"></div>
+      </div>
+      <div class="kpi y">
+        <span class="lbl"><i></i>黄灯 · 观察区</span>
+        <span class="num" id="kpi-y">0</span>
+        <span class="sub" id="kpi-y-sub">— %</span>
+        <div class="ring"></div>
+      </div>
+      <div class="kpi g">
+        <span class="lbl"><i></i>绿灯 · 保持区</span>
+        <span class="num" id="kpi-g">0</span>
+        <span class="sub" id="kpi-g-sub">— %</span>
+        <div class="ring"></div>
+      </div>
+
+      <!-- Donut -->
+      <div class="panel donut-panel">
+        <div class="panel-head">
+          <h2><span class="pip" style="background:linear-gradient(180deg,var(--red),var(--amber),var(--green))"></span>全场红 / 黄 / 绿比例</h2>
+          <span class="meta">基于全部已提交</span>
+        </div>
+        <div class="donut-wrap">
+          <svg class="donut-svg" viewBox="0 0 200 200" id="donut">
+            <circle cx="100" cy="100" r="78" fill="none" stroke="rgba(20,24,28,.05)" stroke-width="28"/>
+            <circle cx="100" cy="100" r="78" fill="none" stroke="var(--red)" stroke-width="28" stroke-linecap="butt" id="arc-r" transform="rotate(-90 100 100)"/>
+            <circle cx="100" cy="100" r="78" fill="none" stroke="var(--amber)" stroke-width="28" stroke-linecap="butt" id="arc-y" transform="rotate(-90 100 100)"/>
+            <circle cx="100" cy="100" r="78" fill="none" stroke="var(--green)" stroke-width="28" stroke-linecap="butt" id="arc-g" transform="rotate(-90 100 100)"/>
+            <text x="100" y="95" text-anchor="middle" font-family="Inter,SF Pro Display,sans-serif" font-size="34" font-weight="700" fill="var(--ink)" id="donut-center">0</text>
+            <text x="100" y="118" text-anchor="middle" font-size="11" fill="var(--muted)" letter-spacing="2">人 已提交</text>
+          </svg>
+          <div class="donut-legend">
+            <div class="legend-row r"><span class="swatch"></span><span class="name">红灯 · 警惕区</span><span class="pct"><span id="leg-r">—</span><small>%</small></span></div>
+            <div class="legend-row y"><span class="swatch"></span><span class="name">黄灯 · 观察区</span><span class="pct"><span id="leg-y">—</span><small>%</small></span></div>
+            <div class="legend-row g"><span class="swatch"></span><span class="name">绿灯 · 保持区</span><span class="pct"><span id="leg-g">—</span><small>%</small></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top3 red habits -->
+      <div class="panel top3-panel">
+        <div class="panel-head">
+          <h2><span class="pip" style="background:var(--red)"></span>最普遍的红灯习惯 · Top 3</h2>
+          <span class="meta">"符合"比例最高</span>
+        </div>
+        <div class="top3-list" id="top3"></div>
+      </div>
+
+      <!-- Activity feed -->
+      <div class="panel feed-panel">
+        <div class="panel-head">
+          <h2><span class="pip" style="background:var(--ink)"></span>最近提交（匿名）</h2>
+          <span class="meta">仅显示分类，不含身份</span>
+        </div>
+        <div class="feed"><div class="feed-list" id="feed"></div></div>
+      </div>
+
+      <!-- Per-question ranking -->
+      <div class="panel rank-panel">
+        <div class="panel-head">
+          <h2><span class="pip" style="background:var(--ink)"></span>逐题"符合"比例</h2>
+          <div class="rank-tabs">
+            <button class="rank-tab active" data-filter="all">全部 15 题</button>
+            <button class="rank-tab" data-filter="r">仅红灯</button>
+            <button class="rank-tab" data-filter="y">仅黄灯</button>
+            <button class="rank-tab" data-filter="g">仅绿灯</button>
+          </div>
+        </div>
+        <div class="rank-grid" id="rank-grid"></div>
+      </div>
+
+    </div>
+
+    <!-- footer -->
+    <div class="stage-foot">
+      <span>互动 ② · 身心营养红绿灯 · 15 题匿名自测</span>
+      <span id="foot-meta">数据每 1 秒刷新一次 · 完全匿名</span>
+    </div>
+
+    <!-- empty overlay (covers grid) -->
+    <div class="empty" id="empty">
+      <div class="qr-box">扫码二维码<br>在 PPT 第 8 页</div>
+      <h3>等待第一份提交…</h3>
+      <p>请扫描 PPT 第 8 页的二维码，约 1 分钟即可完成。</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- CloudBase config + SDK (jsDelivr 主 / unpkg 备) -->
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/dist/cloudbase.full.js"
+        onerror="this.onerror=null;this.src='https://unpkg.com/@cloudbase/js-sdk@2/dist/cloudbase.full.js'"></script>
+
+<!-- React + Babel (jsDelivr 主 / unpkg 备) -->
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"
+        onerror="this.onerror=null;this.src='https://unpkg.com/react@18.3.1/umd/react.production.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"
+        onerror="this.onerror=null;this.src='https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js'"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.29.0/babel.min.js"
+        onerror="this.onerror=null;this.src='https://unpkg.com/@babel/standalone@7.29.0/babel.min.js'"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel">
+/* ============================================================
+   Question definitions (must match the audience H5)
+============================================================ */
+const QUESTIONS = [
+  {tag:"r", text:"经常不吃早餐，空腹到中午"},
+  {tag:"r", text:'三餐总有一顿"随便凑合"'},
+  {tag:"r", text:"每天喝含糖饮料或吃甜食 ≥ 1 次"},
+  {tag:"r", text:"每日蔬菜摄入量不足一拳头"},
+  {tag:"r", text:"很少吃鱼或海鲜类食物"},
+  {tag:"y", text:"偶尔熬夜，导致第二天食欲差"},
+  {tag:"y", text:"经常点重盐、重辣的外卖"},
+  {tag:"y", text:"吃饭速度快，10 分钟内解决"},
+  {tag:"y", text:"每天喝水量不足 1500ml"},
+  {tag:"y", text:"加餐零食常选薯片、饼干类"},
+  {tag:"g", text:"每天吃早餐，且搭配营养均衡"},
+  {tag:"g", text:"三餐定时定量，规律进食"},
+  {tag:"g", text:"每天摄入足量的新鲜蔬菜和水果"},
+  {tag:"g", text:"每周吃鱼或海鲜类食物 2–3 次"},
+  {tag:"g", text:"主动少喝含糖饮料，多喝白水"},
+];
+
+function classify(R, Y, G){
+  const P = 2*R + Y;
+  if (R >= 3 || P >= 6) return "r";
+  if (P <= 1 && G >= 3) return "g";
+  return "y";
+}
+
+/* ============================================================
+   Data store
+   submissions: [{id, ts, answers: ['yes'|'no', ...x15], verdict}]
+============================================================ */
+const Store = {
+  subs: [],
+  add(s){ this.subs.push(s); render(); },
+  reset(){ this.subs = []; render(); },
+  totals(){
+    let r=0,y=0,g=0;
+    this.subs.forEach(s=>{ if(s.verdict==="r")r++; else if(s.verdict==="y")y++; else g++; });
+    return {r,y,g,total:this.subs.length};
+  },
+  perQuestionMatchPct(){
+    const counts = QUESTIONS.map(()=>0);
+    const n = this.subs.length || 1;
+    this.subs.forEach(s=>{
+      s.answers.forEach((a,i)=>{ if(a==="yes") counts[i]++; });
+    });
+    return counts.map(c => Math.round(c/n*100));
+  },
+  redTop3(){
+    const counts = this.perQuestionMatchPct();
+    const reds = QUESTIONS.map((q,i)=>({...q,i,pct:counts[i]})).filter(q=>q.tag==="r");
+    return reds.sort((a,b)=>b.pct-a.pct).slice(0,3);
+  }
+};
+
+/* ============================================================
+   Demo data engine
+============================================================ */
+const Demo = {
+  on:false, paused:false,
+  timer:null,
+  speed:1, // submissions per second factor
+  start(){
+    if (this.timer) return;
+    this.on = true;
+    Store.reset();
+    // seed with a small batch
+    for (let i=0;i<8;i++) this.synth();
+    this.tick();
+  },
+  stop(){
+    this.on=false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer=null;
+  },
+  tick(){
+    if (!this.on) return;
+    if (!this.paused) this.synth();
+    const interval = (1500 + Math.random()*1500) / Math.max(.3, this.speed);
+    this.timer = setTimeout(()=>this.tick(), interval);
+  },
+  synth(){
+    // realistic-ish profile: ~30% red leaning, ~45% yellow, ~25% green
+    const profile = Math.random();
+    const ans = QUESTIONS.map(q=>{
+      let p;
+      if (profile < .30){
+        p = q.tag==="r" ? .55 : q.tag==="y" ? .50 : .25;
+      } else if (profile < .75){
+        p = q.tag==="r" ? .25 : q.tag==="y" ? .45 : .55;
+      } else {
+        p = q.tag==="r" ? .10 : q.tag==="y" ? .25 : .80;
+      }
+      return Math.random() < p ? "yes" : "no";
+    });
+    let R=0,Y=0,G=0;
+    ans.forEach((a,i)=>{ if(a==="yes"){ const t=QUESTIONS[i].tag; if(t==="r")R++; else if(t==="y")Y++; else G++; }});
+    Store.add({id:Math.random().toString(36).slice(2,8), ts:Date.now(), answers:ans, verdict:classify(R,Y,G)});
+  }
+};
+
+/* ============================================================
+   CloudBase hook (only used when not in demo)
+   函数名保留 startFirebase / stopFirebase，便于 Tweaks panel 沿用切换逻辑。
+============================================================ */
+let cloudWatcher = null;
+async function startFirebase(){
+  const cfg = window.CLOUDBASE_CONFIG;
+  if (!cfg || !cfg.env){
+    setLive(false, "未配置 CloudBase · 请使用演示模式");
+    return false;
+  }
+  if (typeof cloudbase === "undefined"){
+    setLive(false, "CloudBase SDK 未加载");
+    return false;
+  }
+  try{
+    const app = cloudbase.init({ env: cfg.env });
+    await app.auth({ persistence: "local" }).signInAnonymously();
+    const db = app.database();
+    Store.reset();
+    cloudWatcher = db.collection(cfg.collection || "diet_submissions")
+      .orderBy("ts", "asc")
+      .watch({
+        onChange: snapshot => {
+          Store.subs = (snapshot.docs || []).map(d => ({
+            id: d.id || d._id || Math.random().toString(36).slice(2,8),
+            ts: d.ts,
+            answers: d.answers,
+            verdict: d.verdict
+          }));
+          render();
+        },
+        onError: err => {
+          console.error(err);
+          setLive(false, "CloudBase 连接失败");
+        }
+      });
+    setLive(true, "LIVE · 实时同步");
+    return true;
+  } catch(e){
+    console.error(e);
+    setLive(false, "CloudBase 连接失败");
+    return false;
+  }
+}
+function stopFirebase(){
+  if (cloudWatcher){
+    try { cloudWatcher.close(); } catch(e){}
+    cloudWatcher = null;
+  }
+}
+
+function setLive(isLive, text){
+  const el = document.getElementById("live");
+  const t = document.getElementById("live-text");
+  el.classList.toggle("demo", !isLive);
+  t.textContent = text;
+}
+
+/* ============================================================
+   Layout fit (1920×1080 → viewport)
+============================================================ */
+function fit(){
+  const s = document.getElementById("stage");
+  const k = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  s.style.transform = `scale(${k})`;
+}
+window.addEventListener("resize", fit);
+fit();
+
+/* ============================================================
+   Render
+============================================================ */
+let lastTotal = 0;
+function render(){
+  const t = Store.totals();
+  const empty = document.getElementById("empty");
+  empty.classList.toggle("show", t.total === 0 && !LAYOUT_TWEAKS.hideEmpty);
+
+  // KPI numbers (animate count-up only on increase)
+  animateNum("kpi-total", t.total);
+  animateNum("kpi-r", t.r);
+  animateNum("kpi-y", t.y);
+  animateNum("kpi-g", t.g);
+
+  const rPct = t.total ? Math.round(t.r/t.total*100) : 0;
+  const yPct = t.total ? Math.round(t.y/t.total*100) : 0;
+  const gPct = t.total ? Math.round(t.g/t.total*100) : 0;
+  document.getElementById("kpi-r-sub").textContent = t.total ? `${rPct} %` : "— %";
+  document.getElementById("kpi-y-sub").textContent = t.total ? `${yPct} %` : "— %";
+  document.getElementById("kpi-g-sub").textContent = t.total ? `${gPct} %` : "— %";
+  document.getElementById("kpi-total-sub").textContent = t.total
+    ? (t.total > lastTotal ? `↑ 较刚才 +${t.total - lastTotal}` : "实时累计")
+    : "扫码加入：PPT 第 8 页二维码";
+  lastTotal = t.total;
+
+  document.getElementById("leg-r").textContent = t.total ? rPct : "—";
+  document.getElementById("leg-y").textContent = t.total ? yPct : "—";
+  document.getElementById("leg-g").textContent = t.total ? gPct : "—";
+
+  // Donut (stacked arcs)
+  const C = 2*Math.PI*78;
+  const setArc = (id, fromPct, lenPct)=>{
+    const el = document.getElementById(id);
+    el.setAttribute("stroke-dasharray", `${C*lenPct/100} ${C}`);
+    el.setAttribute("stroke-dashoffset", `${-C*fromPct/100}`);
+  };
+  setArc("arc-r", 0, rPct);
+  setArc("arc-y", rPct, yPct);
+  setArc("arc-g", rPct+yPct, gPct);
+  document.getElementById("donut-center").textContent = t.total;
+
+  // Top 3 red habits
+  const top3 = Store.redTop3();
+  const top3el = document.getElementById("top3");
+  top3el.innerHTML = top3.map((q,i)=>`
+    <div class="top3-card">
+      <span class="rk">${String(i+1).padStart(2,"0")}</span>
+      <div class="body">
+        <div class="t">${q.text}</div>
+        <div class="barwrap">
+          <div class="bar"><i style="width:${q.pct}%"></i></div>
+          <span class="v">${q.pct}%</span>
+        </div>
+      </div>
+    </div>
+  `).join("");
+  // trigger bar transitions
+  requestAnimationFrame(()=>{
+    top3el.querySelectorAll(".bar i").forEach(i=>{ const w=i.style.width; i.style.width="0"; requestAnimationFrame(()=>i.style.width=w); });
+  });
+
+  // Per-question ranking
+  renderRank();
+
+  // Feed (latest 7)
+  renderFeed();
+}
+
+function animateNum(id, target){
+  const el = document.getElementById(id);
+  const cur = +el.dataset.cur || 0;
+  if (cur === target){ el.textContent = target; return; }
+  const dur = 500;
+  const t0 = performance.now();
+  function step(t){
+    const k = Math.min(1, (t-t0)/dur);
+    const eased = 1 - Math.pow(1-k, 3);
+    el.textContent = Math.round(cur + (target-cur)*eased);
+    if (k<1) requestAnimationFrame(step);
+    else el.dataset.cur = target;
+  }
+  requestAnimationFrame(step);
+}
+
+let rankFilter = "all";
+document.querySelectorAll(".rank-tab").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll(".rank-tab").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    rankFilter = b.dataset.filter;
+    renderRank();
+  });
+});
+
+function renderRank(){
+  const grid = document.getElementById("rank-grid");
+  const pcts = Store.perQuestionMatchPct();
+  const items = QUESTIONS.map((q,i)=>({...q, i, pct:pcts[i]}));
+  const filtered = rankFilter==="all" ? items : items.filter(x=>x.tag===rankFilter);
+  grid.innerHTML = filtered.map(q=>`
+    <div class="rank-row" data-tag="${q.tag}">
+      <span class="qn">Q${String(q.i+1).padStart(2,"0")}</span>
+      <span class="qt" title="${q.text}">${q.text}</span>
+      <div class="qb"><i style="width:${q.pct}%"></i></div>
+      <span class="qv">${q.pct}%</span>
+    </div>
+  `).join("");
+}
+
+function renderFeed(){
+  const feed = document.getElementById("feed");
+  const recent = Store.subs.slice(-7).reverse();
+  const labels = {r:"红灯", y:"黄灯", g:"绿灯"};
+  feed.innerHTML = recent.map(s=>{
+    const ago = Math.max(0, Math.round((Date.now()-s.ts)/1000));
+    const agoStr = ago < 60 ? `${ago}s 前` : `${Math.round(ago/60)}m 前`;
+    return `<div class="feed-item ${s.verdict}">
+      <span class="dot"></span>
+      <span class="anon">匿名 #${s.id}</span>
+      <span class="verdict">${labels[s.verdict]}</span>
+      <span class="when">${agoStr}</span>
+    </div>`;
+  }).join("");
+}
+
+/* clock */
+function updateTime(){
+  const d = new Date();
+  document.getElementById("time").textContent =
+    [d.getHours(), d.getMinutes(), d.getSeconds()].map(x=>String(x).padStart(2,"0")).join(":");
+}
+setInterval(updateTime, 1000); updateTime();
+setInterval(renderFeed, 1000); // refresh "ago" labels
+
+/* ============================================================
+   Layout tweaks
+============================================================ */
+const LAYOUT_TWEAKS = { layout: "dashboard", hideEmpty:false };
+
+function applyLayout(name){
+  LAYOUT_TWEAKS.layout = name;
+  const grid = document.querySelector(".grid");
+  // simple variants by toggling spans
+  document.querySelector(".donut-panel").style.gridColumn = name==="big-pie" ? "span 12" : "span 4";
+  document.querySelector(".donut-panel").style.gridRow    = name==="big-pie" ? "span 2" : "span 1";
+  document.querySelector(".top3-panel").style.display    = name==="big-pie" ? "none" : "";
+  document.querySelector(".feed-panel").style.display    = name==="big-pie" ? "none" : "";
+  document.querySelector(".rank-panel").style.display    = name==="big-pie" ? "none" : "";
+  // big-rank
+  document.querySelector(".rank-panel").style.gridColumn = name==="big-rank" ? "span 12" : "span 12";
+  if (name==="big-rank"){
+    document.querySelector(".donut-panel").style.display="none";
+    document.querySelector(".top3-panel").style.display="none";
+    document.querySelector(".feed-panel").style.display="none";
+    document.querySelector(".rank-panel").style.display="";
+    document.querySelector(".rank-panel").style.gridRow="span 2";
+  } else if (name==="dashboard"){
+    document.querySelector(".donut-panel").style.display="";
+    document.querySelector(".top3-panel").style.display="";
+    document.querySelector(".feed-panel").style.display="";
+    document.querySelector(".rank-panel").style.display="";
+    document.querySelector(".rank-panel").style.gridRow="";
+  }
+  renderRank();
+}
+
+/* ============================================================
+   Tweaks panel
+============================================================ */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "demoMode": false,
+  "demoSpeed": 1,
+  "layout": "dashboard",
+  "showFeed": true,
+  "redAccent": "#E0533F"
+}/*EDITMODE-END*/;
+
+function App(){
+  const [tw, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+
+  React.useEffect(()=>{
+    if (tw.demoMode){ stopFirebase(); Demo.start(); setLive(false,"演示模式 · 模拟数据"); }
+    else { Demo.stop(); startFirebase(); }
+  }, [tw.demoMode]);
+
+  React.useEffect(()=>{ Demo.speed = tw.demoSpeed; }, [tw.demoSpeed]);
+  React.useEffect(()=>{ applyLayout(tw.layout); }, [tw.layout]);
+  React.useEffect(()=>{
+    document.querySelector(".feed-panel").style.display = tw.showFeed ? "" : "none";
+  }, [tw.showFeed]);
+  React.useEffect(()=>{
+    document.documentElement.style.setProperty("--red", tw.redAccent);
+  }, [tw.redAccent]);
+
+  const [paused, setPaused] = React.useState(false);
+  React.useEffect(()=>{
+    Demo.paused = paused;
+    document.getElementById("pause-banner").classList.toggle("show", paused);
+  }, [paused]);
+
+  return (
+    <TweaksPanel title="Tweaks" defaultOpen={false}>
+      <TweakSection label="数据源" />
+      <TweakToggle label="演示模式（模拟数据）" value={tw.demoMode} onChange={v=>setTweak("demoMode", v)} />
+      {tw.demoMode && (
+        <TweakSlider label="模拟速度" min={0.3} max={4} step={0.1} value={tw.demoSpeed} onChange={v=>setTweak("demoSpeed", v)} unit="×" />
+      )}
+
+      <TweakSection label="现场控制" />
+      <TweakToggle label="暂停接收新数据" value={paused} onChange={setPaused} />
+      <TweakButton label="重置 / 清空全部数据" onClick={()=>{ if(confirm("确定清空全部数据？")) Store.reset(); }} />
+
+      <TweakSection label="布局" />
+      <TweakSelect label="视图模式" value={tw.layout} onChange={v=>setTweak("layout", v)} options={["dashboard","big-pie","big-rank"]} />
+      <TweakToggle label="显示「最近提交」滚动" value={tw.showFeed} onChange={v=>setTweak("showFeed", v)} />
+
+      <TweakSection label="视觉" />
+      <TweakColor label="红灯主色" value={tw.redAccent} onChange={v=>setTweak("redAccent", v)} />
+    </TweaksPanel>
+  );
+}
+
+/* mount */
+function bootTweaks(){
+  if (!window.useTweaks){ setTimeout(bootTweaks, 80); return; }
+  const root = document.createElement("div");
+  document.body.appendChild(root);
+  ReactDOM.createRoot(root).render(<App/>);
+}
+</script>
+<script type="text/babel">
+  bootTweaks();
+  // Start in demo mode by default
+  Demo.start();
+  setLive(false, "演示模式 · 模拟数据");
+</script>
+
+</body>
+</html>
