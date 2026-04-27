@@ -34,7 +34,7 @@ diet-h5/
    - `localhost:8080`（仅本地测试时用，测完删）
 2. **匿名登录** 已开启（DCT 已配，复用即可）
 3. **数据库 → diet_submissions 集合**：
-   - 权限：「所有用户可读，所有用户可写」
+   - 权限：「读取全部数据，修改本人数据 [READONLY]」（新版控制台命名；语义=匿名用户能创建自己提交 + 读所有人提交，但改不了别人的）
    - 字段：`ts`, `answers[15]`, `verdict`, `R/Y/G/P`, `id`
 
 如果换新 CloudBase 环境，改 `docs/config.js` 的 `env` 字段。
