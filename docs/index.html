@@ -491,12 +491,30 @@ submitBtn.addEventListener("click", async () => {
    SDK 通过 esm.sh ES module dynamic import 加载（npm 包无 UMD bundle）。
 ============================================================ */
 let _cbModule = null;
+const _CB_URLS = [
+  "https://esm.sh/@cloudbase/js-sdk@2?bundle-deps",
+  "https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/+esm",
+  "https://esm.sh/@cloudbase/js-sdk@2"
+];
 async function getCloudBase(){
-  if (!_cbModule){
-    const m = await import("https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/+esm");
-    _cbModule = m.default || m;
+  if (_cbModule) return _cbModule;
+  let lastErr;
+  for (const url of _CB_URLS){
+    try{
+      const m = await import(url);
+      const cb = m.default || m;
+      if (cb && typeof cb.init === "function"){
+        console.info("[cloudbase] SDK loaded from", url);
+        _cbModule = cb;
+        return _cbModule;
+      }
+      lastErr = new Error("module loaded but init() not found");
+    }catch(e){
+      console.warn("[cloudbase] CDN failed:", url, e.message);
+      lastErr = e;
+    }
   }
-  return _cbModule;
+  throw lastErr || new Error("All SDK CDNs failed");
 }
 
 async function submitToBackend(result){

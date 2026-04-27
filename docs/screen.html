@@ -301,16 +301,35 @@
 <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.29.0/babel.min.js"
         onerror="this.onerror=null;this.src='https://unpkg.com/@babel/standalone@7.29.0/babel.min.js'"></script>
 
-<!-- CloudBase SDK loader: 必须在普通 <script> 块里（type=text/babel 会把 dynamic import() 误转成 require） -->
+<!-- CloudBase SDK loader: 必须在普通 <script> 块里（type=text/babel 会把 dynamic import() 误转成 require）。
+     尝试多个 ESM CDN，第一个能加载并初始化的就用，避免单点 CDN 转换 bug 阻塞讲座现场。 -->
 <script>
 window.getCloudBase = (function(){
   let _cb = null;
+  const URLS = [
+    "https://esm.sh/@cloudbase/js-sdk@2?bundle-deps",
+    "https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/+esm",
+    "https://esm.sh/@cloudbase/js-sdk@2"
+  ];
   return async function(){
-    if (!_cb){
-      const m = await import("https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@2/+esm");
-      _cb = m.default || m;
+    if (_cb) return _cb;
+    let lastErr;
+    for (const url of URLS){
+      try{
+        const m = await import(url);
+        const cb = m.default || m;
+        if (cb && typeof cb.init === "function"){
+          console.info("[cloudbase] SDK loaded from", url);
+          _cb = cb;
+          return _cb;
+        }
+        lastErr = new Error("module loaded but init() not found");
+      }catch(e){
+        console.warn("[cloudbase] CDN failed:", url, e.message);
+        lastErr = e;
+      }
     }
-    return _cb;
+    throw lastErr || new Error("All SDK CDNs failed");
   };
 })();
 </script>
