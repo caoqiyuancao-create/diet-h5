@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>身心营养红绿灯 · 15题自测</title>
+<!-- importmap: 拦截 SDK 子依赖 text-encoding-shim 转向原生 TextDecoder polyfill -->
+<script type="importmap">
+{
+  "imports": {
+    "https://cdn.jsdelivr.net/npm/text-encoding-shim@1.0.5/+esm": "data:text/javascript,export const TextDecoder = globalThis.TextDecoder;export const TextEncoder = globalThis.TextEncoder;",
+    "https://esm.sh/text-encoding-shim@^1.0.5?target=es2022": "data:text/javascript,export const TextDecoder = globalThis.TextDecoder;export const TextEncoder = globalThis.TextEncoder;",
+    "https://esm.sh/text-encoding-shim@1.0.5": "data:text/javascript,export const TextDecoder = globalThis.TextDecoder;export const TextEncoder = globalThis.TextEncoder;"
+  }
+}
+</script>
 <style>
   :root{
     --bg:#F6F4EF;

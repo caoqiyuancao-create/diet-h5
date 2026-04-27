@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=1920,initial-scale=1">
 <title>身心营养红绿灯 · 实时统计大屏</title>
+<!-- importmap: 拦截 SDK 子依赖 text-encoding-shim (CJS-only, ESM 转换器都解不出 named export TextDecoder)，
+     转向 inline data URL 模块用浏览器原生 TextDecoder/TextEncoder。必须在第一个 ES module 加载前 ready。 -->
+<script type="importmap">
+{
+  "imports": {
+    "https://cdn.jsdelivr.net/npm/text-encoding-shim@1.0.5/+esm": "data:text/javascript,export const TextDecoder = globalThis.TextDecoder;export const TextEncoder = globalThis.TextEncoder;",
+    "https://esm.sh/text-encoding-shim@^1.0.5?target=es2022": "data:text/javascript,export const TextDecoder = globalThis.TextDecoder;export const TextEncoder = globalThis.TextEncoder;",
+    "https://esm.sh/text-encoding-shim@1.0.5": "data:text/javascript,export const TextDecoder = globalThis.TextDecoder;export const TextEncoder = globalThis.TextEncoder;"
+  }
+}
+</script>
 <style>
   :root{
     --bg:#F6F4EF;
